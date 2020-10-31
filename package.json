@@ -1,0 +1,14 @@
+{
+  "name": "screeps",
+  "version": "0.0.1",
+  "scripts": {
+    "copy": "xcopy src \"C:\\Users\\Iain\\AppData\\Local\\Screeps\\scripts\\127_0_0_1___21025\\default\" /y"
+  },
+  "devDependencies": {
+    "@babel/preset-env": "^7.9.5",
+    "babel-plugin-transform-es2015-modules-commonjs": "^6.26.2",
+    "core-js": "^3.4.8",
+    "jest": "^26.6.1",
+    "lodash": "^3.10.1"
+  }
+}

@@ -1,0 +1,34 @@
+<component name="ProjectCodeStyleConfiguration">
+  <code_scheme name="Project" version="173">
+    <option name="OTHER_INDENT_OPTIONS">
+      <value>
+        <option name="INDENT_SIZE" value="2" />
+        <option name="TAB_SIZE" value="2" />
+      </value>
+    </option>
+    <JSCodeStyleSettings version="0">
+      <option name="IMPORT_SORT_MODULE_NAME" value="true" />
+    </JSCodeStyleSettings>
+    <PostgresCodeStyleSettings version="2">
+      <option name="QUERY_ALIGN_ELEMENTS" value="false" />
+      <option name="INSERT_CONTENT" value="0" />
+    </PostgresCodeStyleSettings>
+    <codeStyleSettings language="JAVA">
+      <indentOptions>
+        <option name="CONTINUATION_INDENT_SIZE" value="4" />
+      </indentOptions>
+    </codeStyleSettings>
+    <codeStyleSettings language="JavaScript">
+      <indentOptions>
+        <option name="INDENT_SIZE" value="2" />
+        <option name="CONTINUATION_INDENT_SIZE" value="2" />
+        <option name="TAB_SIZE" value="2" />
+      </indentOptions>
+    </codeStyleSettings>
+    <codeStyleSettings language="Scala">
+      <option name="ALIGN_MULTILINE_PARAMETERS" value="false" />
+      <option name="METHOD_PARAMETERS_LPAREN_ON_NEXT_LINE" value="true" />
+      <option name="METHOD_PARAMETERS_RPAREN_ON_NEXT_LINE" value="true" />
+    </codeStyleSettings>
+  </code_scheme>
+</component>
