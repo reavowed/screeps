@@ -31,7 +31,7 @@ class MapUtils {
         if (_.isNumber(direction)) {
             return ((direction + increment - 1) % 8) + 1;
         } else {
-            return MapUtils.directionsByConstant[this.clockwiseDirection(direction.constant)];
+            return MapUtils.directionsByConstant[this.clockwiseDirection(direction.constant, increment)];
         }
     }
 
@@ -39,7 +39,7 @@ class MapUtils {
         if (_.isNumber(direction)) {
             return ((direction - increment + 7) % 8) + 1;
         } else {
-            return MapUtils.directionsByConstant[this.anticlockwiseDirection(direction.constant)];
+            return MapUtils.directionsByConstant[this.anticlockwiseDirection(direction.constant, increment)];
         }
     }
 
