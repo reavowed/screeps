@@ -155,13 +155,20 @@ class Searcher {
     loadCosts() {
         if (!this.room.terrainCosts) {
             this.room.terrainCosts = new Uint8Array(2500);
-            const terrainLookup = this.room.lookAtArea(0, 0, 49, 49);
+            const terrain = this.room.getTerrain();
             for (let x = 0; x < 50; ++x) {
                 for (let y = 0; y < 50; ++y) {
-                    const terrain = _.find(terrainLookup[y][x], o => o.type === "terrain").terrain;
-                    this.room.terrainCosts[y * 50 + x] = terrain === "plain" ? 2 :
-                        terrain === "swamp" ? 10 :
-                            255;
+                    switch (terrain.get(x, y)) {
+                        case TERRAIN_MASK_WALL:
+                            this.room.terrainCosts[y * 50 + x] = 255;
+                            break;
+                        case TERRAIN_MASK_SWAMP:
+                            this.room.terrainCosts[y * 50 + x] = 10;
+                            break;
+                        case 0:
+                            this.room.terrainCosts[y * 50 + x] = 2;
+                            break;
+                    }
                 }
             }
         }

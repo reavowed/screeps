@@ -1,21 +1,6 @@
 import './globalsForTests';
 import Searcher from './searcher';
-import _ from 'lodash';
-
-function createRoomWithWalls(walls) {
-    const terrain = {};
-    for (let y = 0; y < 50; ++y) {
-        terrain[y] = {};
-        for (let x = 0; x < 50; ++x) {
-            terrain[y][x] = [{type: "terrain", terrain: "plain"}];
-        }
-    }
-    _.forEach(walls, ([x, y]) => terrain[y][x][0].terrain = "wall");
-    const room = {};
-    room.getPositionAt = (x, y) => { return {x, y}; };
-    room.lookAtArea = () => terrain;
-    return room;
-}
+import {createRoomWithWalls} from './search.test.common';
 
 test('find a simple path', function () {
     const source = {x: 23, y: 14};

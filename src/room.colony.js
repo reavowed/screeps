@@ -1,5 +1,6 @@
 const Nest = require("./area.nest");
 const EnergyMine = require("./area.energyMine");
+const MovementOverseer = require("./movementOverseer");
 
 const Searcher = require("./searcher");
 const Log = require("./log");
@@ -21,12 +22,15 @@ module.exports = class Colony {
             this.initialise();
             this.memory.initialised = true;
         }
+        this.movementOverseer = new MovementOverseer(this, this.memory.movement);
         this.loadNest();
         this.loadEnergyMines();
     }
 
     initialise() {
         Log.info("Initialising colony at", this.room.name);
+
+        this.memory.movement = {};
 
         const spawns = this.room.find(FIND_MY_SPAWNS);
         if (spawns.length === 0) {
@@ -42,7 +46,6 @@ module.exports = class Colony {
         this.memory.nest = {
             spawnId: spawn.id
         };
-        this.loadNest();
 
         this.memory.energyMines = [];
         this.room.find(FIND_SOURCES).forEach(source => {
@@ -58,8 +61,6 @@ module.exports = class Colony {
             });
         });
         this.memory.energyMines = _.sortBy(this.memory.energyMines, m => m.pathFromSpawn.length);
-        this.loadEnergyMines();
-        _.forEach(this.energyMines, energyMine => energyMine.initialise());
     }
 
     loadNest() {
@@ -68,6 +69,7 @@ module.exports = class Colony {
 
     loadEnergyMines() {
         this.energyMines = this.energyMines || _.map(this.memory.energyMines, (energyMineMemory, index) => new EnergyMine(this, energyMineMemory, index));
+        _.forEach(this.energyMines, energyMine => energyMine.load());
     }
 
     addCreep(creep) {

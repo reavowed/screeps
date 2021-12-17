@@ -1,3 +1,5 @@
+const _ = require("lodash");
+
 function compare(a, b) {
     return (a < b) ? -1 :
         (a > b) ? 1 : 0;
@@ -28,11 +30,19 @@ class MapUtils {
     }
 
     static clockwiseDirection(direction, increment = 1) {
-        return MapUtils.directionsByConstant[((direction.constant + increment - 1) % 8) + 1];
+        if (_.isNumber(direction)) {
+            return ((direction + increment - 1) % 8) + 1;
+        } else {
+            return MapUtils.directionsByConstant[this.clockwiseDirection(direction.constant)];
+        }
     }
 
     static anticlockwiseDirection(direction, increment = 1) {
-        return MapUtils.directionsByConstant[((direction.constant - increment + 7) % 8) + 1];
+        if (_.isNumber(direction)) {
+            return ((direction - increment + 7) % 8) + 1;
+        } else {
+            return MapUtils.directionsByConstant[this.anticlockwiseDirection(direction.constant)];
+        }
     }
 
     static reverseDirection(direction) {
