@@ -2,7 +2,7 @@
   "name": "screeps",
   "version": "0.0.1",
   "scripts": {
-    "copy": "xcopy src \"C:\\Users\\Iain\\AppData\\Local\\Screeps\\scripts\\127_0_0_1___21025\\default\" /y"
+    "copy": "xcopy src \"C:\\Users\\Iain\\AppData\\Local\\Screeps\\scripts\\screeps.com\\new\" /y"
   },
   "devDependencies": {
     "@babel/preset-env": "^7.9.5",
