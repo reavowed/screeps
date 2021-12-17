@@ -15,7 +15,7 @@ module.exports = class MovementOverseer {
             creep.moveByPath(creep.memory.move.path);
             creep.memory.move.tick = Game.time;
         } else {
-            const path = new Searcher(creep.pos, targetPosition).avoidingPositions(this.positionsToAvoid).findSinglePath();
+            const path = new Searcher(creep.room, creep.pos, targetPosition).avoidingPositions(this.positionsToAvoid).findSinglePath();
             creep.memory.move = {
                 path,
                 tick: Game.time

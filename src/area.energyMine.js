@@ -117,8 +117,9 @@ module.exports = class EnergyMine {
     initialise() {
         const possiblePositions = MapUtils.findAdjacentFreeSpaces(this.colony.room, this.source.pos);
         const positionEvaluations = _.filter(_.map(possiblePositions, position => this.evaluatePosition(position, possiblePositions)));
-        const {position, children} = this.getBestPositions(positionEvaluations)[0];
+        const {position, path, children} = this.getBestPositions(positionEvaluations)[0];
         this.memory.miningPosition = position;
+        this.memory.miningPositionPath = path;
         this.memory.miningPositionChildren = children;
     }
 
@@ -241,6 +242,7 @@ module.exports = class EnergyMine {
             miner.drop(RESOURCE_ENERGY);
         }
     }
+
     runChildMiner(miner) {
         miner.harvest(this.source);
         if (this.mainMiner && miner.store.getUsedCapacity(RESOURCE_ENERGY) > 0) {
@@ -257,11 +259,12 @@ module.exports = class EnergyMine {
     }
 
     getFirstMinerCreepOrder() {
-        return {spec: miner, memory: {mine: this.index, task: "move"}, directions: [this.pathFromSpawn[0].direction]};
+        console.log(JSON.stringify(this.miningPosition));
+        return {spec: miner, memory: {mine: this.index, task: "move"}, directions: [this.memory.miningPositionPath[0].direction]};
     }
 
     getAllCreepOrders() {
-        const numberOfMinersToRequest = this.memory.childPositionDirections.length + 1 - this.miners.length;
+        const numberOfMinersToRequest = this.memory.miningPositionChildren.length + 1 - this.miners.length;
         return _.fill(Array(numberOfMinersToRequest), this.getFirstMinerCreepOrder());
     }
 };
