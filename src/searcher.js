@@ -1,4 +1,3 @@
-const _ = require("lodash");
 const MapUtils = require("./utils.map");
 
 function getPreferredDirections(source, target) {
