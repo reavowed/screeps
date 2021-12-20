@@ -2,7 +2,7 @@
   "name": "screeps",
   "version": "0.0.1",
   "scripts": {
-    "build-js": "tsc && parcel build --no-optimize"
+    "build-js": "tsc --noEmit && parcel build --no-optimize"
   },
   "dependencies": {
     "lodash": "^3.10.1"
