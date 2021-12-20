@@ -8,9 +8,12 @@
     "lodash": "^3.10.1"
   },
   "devDependencies": {
-    "@babel/preset-env": "^7.9.5",
+    "@babel/core": "^7.16.5",
+    "@babel/preset-env": "^7.16.5",
+    "@babel/preset-typescript": "^7.16.5",
     "@types/lodash": "^3.10.1",
     "@types/screeps": "^3.2.4",
+    "babel-jest": "^27.4.5",
     "babel-plugin-transform-es2015-modules-commonjs": "^6.26.2",
     "core-js": "^3.4.8",
     "jest": "^26.6.1",

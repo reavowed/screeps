@@ -1,6 +1,6 @@
 import './globalsForTests';
 import sinon from 'sinon';
-import EnergyMine from './area.energyMine';
+import {EnergyMine} from './area.energyMine';
 import {createRoomWithWalls} from './search.test.common';
 
 beforeEach(() => {
@@ -17,9 +17,10 @@ function randomId() {
         .join ("");
 }
 
-function createSource(x, y) {
+function createSource(room = room, x, y) {
     const source = {
         id: randomId(),
+        room,
         pos: {x, y}
     };
     Game.getObjectById
@@ -28,13 +29,14 @@ function createSource(x, y) {
     return source;
 }
 
-function createSpawn(x, y) {
+function createSpawn(room, x, y) {
     return {
-        pos: {x, y}
+        pos: {x, y},
+        room
     };
 }
 
-function createEnergyMine(room, source, spawn, memory) {
+function createEnergyMine(room, source, spawn, memory = {}, creeps = []) {
     const colony = {
         room,
         nest: {
@@ -44,44 +46,42 @@ function createEnergyMine(room, source, spawn, memory) {
             moveCreep: sinon.spy()
         }
     };
-    memory = {...(memory || {}), sourceId: source.id};
-    return new EnergyMine(colony, memory, 0);
+    memory = EnergyMine.initialiseMemory(source, spawn);
+    return new EnergyMine(colony, memory, 0, creeps);
 }
 
-function createEnergyMineWithTwoSingleChildren() {
+function createEnergyMineWithTwoSingleChildren(creeps) {
     const room = createRoomWithWalls([
         [29, 21], [30, 21], [31, 21],
         [29, 22], [30, 22], [31, 22]
     ]);
-    const source = createSource(30, 21);
-    const spawn = createSpawn(30, 15);
+    const source = createSource(room, 30, 21);
+    const spawn = createSpawn(room, 30, 15);
     const memory = {
         miningPosition: {x: 30, y: 20},
         miningPositionChildren: [RIGHT, LEFT],
         initialised: true
     };
 
-    const energyMine = createEnergyMine(room, source, spawn, memory);
-    energyMine.load();
+    const energyMine = createEnergyMine(room, source, spawn, memory, creeps);
 
     return {room, source, spawn, energyMine};
 }
 
-function createEnergyMineWithADoubleChild() {
+function createEnergyMineWithADoubleChild(creeps) {
     const room = createRoomWithWalls([
         [29, 21], [30, 21], [31, 21],
         [29, 22], [30, 22], [31, 22]
     ]);
-    const source = createSource(30, 21);
-    const spawn = createSpawn(24, 15);
+    const source = createSource(room, 30, 21);
+    const spawn = createSpawn(room, 24, 15);
     const memory = {
         miningPosition: {x: 29, y: 20},
         miningPositionChildren: [[RIGHT, RIGHT]],
         initialised: true
     };
 
-    const energyMine = createEnergyMine(room, source, spawn, memory);
-    energyMine.load();
+    const energyMine = createEnergyMine(room, source, spawn, memory, creeps);
 
     return {room, source, spawn, energyMine};
 }
@@ -120,38 +120,34 @@ test('pick a central mining space against a wall', () => {
         [29, 21], [30, 21], [31, 21],
         [29, 22], [30, 22], [31, 22]
     ]);
-    const source = createSource(30, 21);
-    const spawn = createSpawn(30, 15);
+    const source = createSource(room, 30, 21);
+    const spawn = createSpawn(room, 30, 15);
 
     const energyMine = createEnergyMine(room, source, spawn);
-    energyMine.load();
 
-    expect(energyMine.memory.initialised).toBe(true);
     expect(energyMine.memory.miningPosition).toEqual({x: 30, y: 20});
-    expect(energyMine.memory.miningPositionChildren).toEqual([RIGHT, LEFT]);
+    expect(energyMine.memory.miningPositionChildrenType).toEqual("twoSingle")
+    expect(energyMine.memory.miningPositionChildrenDirections).toEqual([RIGHT, LEFT]);
 });
 
-test('pick an DirectionOffset central mining space against a wall', () => {
+test('pick an offset central mining space against a wall', () => {
     const room = createRoomWithWalls([
         [29, 21], [30, 21], [31, 21],
         [29, 22], [30, 22], [31, 22]
     ]);
-    const source = createSource(30, 21);
-    const spawn = createSpawn(24, 15);
+    const source = createSource(room, 30, 21);
+    const spawn = createSpawn(room, 24, 15);
 
     const energyMine = createEnergyMine(room, source, spawn);
-    energyMine.load();
 
-    expect(energyMine.memory.initialised).toBe(true);
     expect(energyMine.memory.miningPosition).toEqual({x: 29, y: 20});
-    expect(energyMine.memory.miningPositionChildren).toEqual([[RIGHT, RIGHT]]);
+    expect(energyMine.memory.miningPositionChildrenType).toEqual("double")
+    expect(energyMine.memory.miningPositionChildrenDirections).toEqual([RIGHT, RIGHT]);
 });
 
 test('delegate a distant miner to the movement overseer and continue moving', () => {
-    const {energyMine} = createEnergyMineWithTwoSingleChildren();
-
     const creep = createMiner().withMemory({task: "move"}).atPosition({x: 30, y: 16});
-    energyMine.addCreep(creep);
+    const {energyMine} = createEnergyMineWithTwoSingleChildren([creep]);
     energyMine.runCreeps();
 
     expect(energyMine.colony.movementOverseer.moveCreep).toHaveBeenCalledWith(creep, {x: 30, y: 20});
@@ -159,14 +155,12 @@ test('delegate a distant miner to the movement overseer and continue moving', ()
 });
 
 test('run all miners in two single children', () => {
-    const {energyMine, source} = createEnergyMineWithTwoSingleChildren();
-    const mainMiner = createMiner().withMemory({task: "mine", main: true}).withStoredEnergy(10);
-    const firstChildMiner = createMiner().withMemory({task: "mine", child: 0}).withStoredEnergy(10);
-    const secondChildMiner = createMiner().withMemory({task: "mine", child: 1}).withStoredEnergy(0);
+    const mainMiner = createMiner().withMemory({task: "mine", isMain: true}).withStoredEnergy(10);
+    const firstChildMiner = createMiner().withMemory({task: "mine", childIndex: 0}).withStoredEnergy(10);
+    const secondChildMiner = createMiner().withMemory({task: "mine", childIndex: 1}).withStoredEnergy(0);
 
-    energyMine.addCreep(mainMiner);
-    energyMine.addCreep(firstChildMiner);
-    energyMine.addCreep(secondChildMiner);
+    const {energyMine, source} = createEnergyMineWithTwoSingleChildren([mainMiner, firstChildMiner, secondChildMiner]);
+
     energyMine.runCreeps();
 
     expect(mainMiner.harvest).toHaveBeenCalledWith(source);
@@ -179,48 +173,38 @@ test('run all miners in two single children', () => {
 });
 
 test('move a close miner to the mining position and switch roles', () => {
-    const {energyMine} = createEnergyMineWithTwoSingleChildren();
-
     const creep = createMiner().withMemory({task: "move"}).atPosition({x: 30, y: 19});
-
-    energyMine.addCreep(creep);
+    const {energyMine} = createEnergyMineWithTwoSingleChildren([creep]);
     energyMine.runCreeps();
 
     expect(creep.move).toHaveBeenCalledWith(BOTTOM);
     expect(energyMine.colony.movementOverseer.moveCreep).toHaveBeenCalledTimes(0);
     expect(creep.memory.task).toBe("mine");
-    expect(creep.memory.main).toBe(true);
+    expect(creep.memory.isMain).toBe(true);
 });
 
 test('move an existing miner out of the way into a single child', () => {
-    const {energyMine} = createEnergyMineWithTwoSingleChildren();
-
-    const mainMiner = createMiner().withMemory({task: "mine", main: true});
+    const mainMiner = createMiner().withMemory({task: "mine", isMain: true});
     const mover = createMiner().withMemory({task: "move"}).atPosition({x: 30, y: 19});
 
-    energyMine.addCreep(mainMiner);
-    energyMine.addCreep(mover);
+    const {energyMine} = createEnergyMineWithTwoSingleChildren([mainMiner, mover]);
     energyMine.runCreeps();
 
     expect(mover.move).toHaveBeenCalledWith(BOTTOM);
     expect(mainMiner.move).toHaveBeenCalledWith(RIGHT);
 
     expect(mover.memory.task).toBe("mine");
-    expect(mover.memory.main).toBe(true);
-    expect(mainMiner.memory.main).toBe(undefined);
-    expect(mainMiner.memory.child).toBe(0);
+    expect(mover.memory.isMain).toBe(true);
+    expect(mainMiner.memory.isMain).toBe(undefined);
+    expect(mainMiner.memory.childIndex).toBe(0);
 });
 
 test('move an existing miner out of the way into a second child', () => {
-    const {energyMine} = createEnergyMineWithTwoSingleChildren();
-
-    const mainMiner = createMiner().withMemory({task: "mine", main: true});
-    const childMiner = createMiner().withMemory({task: "mine", child: 0});
+    const mainMiner = createMiner().withMemory({task: "mine", isMain: true});
+    const childMiner = createMiner().withMemory({task: "mine", childIndex: 0});
     const mover = createMiner().withMemory({task: "move"}).atPosition({x: 30, y: 19});
 
-    energyMine.addCreep(mainMiner);
-    energyMine.addCreep(childMiner);
-    energyMine.addCreep(mover);
+    const {energyMine} = createEnergyMineWithTwoSingleChildren([mainMiner, childMiner, mover]);
     energyMine.runCreeps();
 
     expect(mover.move).toHaveBeenCalledWith(BOTTOM);
@@ -228,41 +212,34 @@ test('move an existing miner out of the way into a second child', () => {
     expect(childMiner.move).toHaveBeenCalledTimes(0);
 
     expect(mover.memory.task).toBe("mine");
-    expect(mover.memory.main).toBe(true);
-    expect(mainMiner.memory.main).toBe(undefined);
-    expect(mainMiner.memory.child).toBe(1);
+    expect(mover.memory.isMain).toBe(true);
+    expect(mainMiner.memory.isMain).toBe(undefined);
+    expect(mainMiner.memory.childIndex).toBe(1);
 });
 
 test('move an existing miner out of the way into a double child', () => {
-    const {energyMine} = createEnergyMineWithADoubleChild();
-
-    const mainMiner = createMiner().withMemory({task: "mine", main: true});
+    const mainMiner = createMiner().withMemory({task: "mine", isMain: true});
     const mover = createMiner().withMemory({task: "move"}).atPosition({x: 28, y: 19});
 
-    energyMine.addCreep(mainMiner);
-    energyMine.addCreep(mover);
+    const {energyMine} = createEnergyMineWithADoubleChild([mainMiner, mover]);
     energyMine.runCreeps();
 
     expect(mover.move).toHaveBeenCalledWith(BOTTOM_RIGHT);
     expect(mainMiner.move).toHaveBeenCalledWith(RIGHT);
 
     expect(mover.memory.task).toBe("mine");
-    expect(mover.memory.main).toBe(true);
-    expect(mainMiner.memory.main).toBe(undefined);
-    expect(mainMiner.memory.child).toBe(0);
-    expect(mainMiner.memory.secondary).toBe(false);
+    expect(mover.memory.isMain).toBe(true);
+    expect(mainMiner.memory.isMain).toBe(undefined);
+    expect(mainMiner.memory.childIndex).toBe(0);
+    expect(mainMiner.memory.isSecondary).toBe(undefined);
 });
 
 test('move an existing miner out of the way into an occupied double child', () => {
-    const {energyMine} = createEnergyMineWithADoubleChild();
-
-    const mainMiner = createMiner().withMemory({task: "mine", main: true});
-    const childMiner = createMiner().withMemory({task: "mine", child: 0, secondary: false});
+    const mainMiner = createMiner().withMemory({task: "mine", isMain: true});
+    const childMiner = createMiner().withMemory({task: "mine", childIndex: 0, secondary: false});
     const mover = createMiner().withMemory({task: "move"}).atPosition({x: 28, y: 19});
 
-    energyMine.addCreep(mainMiner);
-    energyMine.addCreep(childMiner);
-    energyMine.addCreep(mover);
+    const {energyMine} = createEnergyMineWithADoubleChild([mainMiner, childMiner, mover]);
     energyMine.runCreeps();
 
     expect(mover.move).toHaveBeenCalledWith(BOTTOM_RIGHT);
@@ -270,22 +247,19 @@ test('move an existing miner out of the way into an occupied double child', () =
     expect(childMiner.move).toHaveBeenCalledWith(RIGHT);
 
     expect(mover.memory.task).toBe("mine");
-    expect(mover.memory.main).toBe(true);
-    expect(mainMiner.memory.main).toBe(undefined);
-    expect(mainMiner.memory.child).toBe(0);
-    expect(mainMiner.memory.secondary).toBe(false);
-    expect(childMiner.memory.child).toBe(0);
-    expect(childMiner.memory.secondary).toBe(true);
+    expect(mover.memory.isMain).toBe(true);
+    expect(mainMiner.memory.isMain).toBe(undefined);
+    expect(mainMiner.memory.childIndex).toBe(0);
+    expect(mainMiner.memory.isSecondary).toBe(undefined);
+    expect(childMiner.memory.childIndex).toBe(0);
+    expect(childMiner.memory.isSecondary).toBe(true);
 });
 
 test('recover a main miner from a single child', () => {
-    const {energyMine} = createEnergyMineWithTwoSingleChildren();
+    const firstChildMiner = createMiner().withMemory({task: "mine", childIndex: 0});
+    const secondChildMiner = createMiner().withMemory({task: "mine", childIndex: 1});
 
-    const firstChildMiner = createMiner().withMemory({task: "mine", child: 0});
-    const secondChildMiner = createMiner().withMemory({task: "mine", child: 1});
-
-    energyMine.addCreep(firstChildMiner);
-    energyMine.addCreep(secondChildMiner);
+    const {energyMine} = createEnergyMineWithTwoSingleChildren([firstChildMiner, secondChildMiner]);
     energyMine.runCreeps();
 
     expect(firstChildMiner.move).toHaveBeenCalledWith(LEFT);
@@ -293,24 +267,19 @@ test('recover a main miner from a single child', () => {
 });
 
 test('recover a main miner from a second single child', () => {
-    const {energyMine} = createEnergyMineWithTwoSingleChildren();
+    const childMiner = createMiner().withMemory({task: "mine", childIndex: 1});
 
-    const childMiner = createMiner().withMemory({task: "mine", child: 1});
-
-    energyMine.addCreep(childMiner);
+    const {energyMine} = createEnergyMineWithTwoSingleChildren([childMiner]);
     energyMine.runCreeps();
 
     expect(childMiner.move).toHaveBeenCalledWith(RIGHT);
 });
 
 test('recover a main miner from a double child', () => {
-    const {energyMine} = createEnergyMineWithADoubleChild();
+    const firstChildMiner = createMiner().withMemory({task: "mine", childIndex: 0});
+    const secondChildMiner = createMiner().withMemory({task: "mine", childIndex: 0, secondary: true});
 
-    const firstChildMiner = createMiner().withMemory({task: "mine", child: 0});
-    const secondChildMiner = createMiner().withMemory({task: "mine", child: 0, secondary: true});
-
-    energyMine.addCreep(firstChildMiner);
-    energyMine.addCreep(secondChildMiner);
+    const {energyMine} = createEnergyMineWithADoubleChild([firstChildMiner, secondChildMiner]);
     energyMine.runCreeps();
 
     expect(firstChildMiner.move).toHaveBeenCalledWith(LEFT);
@@ -319,13 +288,10 @@ test('recover a main miner from a double child', () => {
 
 
 test('rebalance a double child', () => {
-    const {energyMine} = createEnergyMineWithADoubleChild();
+    const mainMiner = createMiner().withMemory({task: "mine", isMain: true});
+    const childMiner = createMiner().withMemory({task: "mine", childIndex: 0, isSecondary: true});
 
-    const mainMiner = createMiner().withMemory({task: "mine", main: true});
-    const childMiner = createMiner().withMemory({task: "mine", child: 0, secondary: true});
-
-    energyMine.addCreep(mainMiner);
-    energyMine.addCreep(childMiner);
+    const {energyMine} = createEnergyMineWithADoubleChild([mainMiner, childMiner]);
     energyMine.runCreeps();
 
     expect(childMiner.move).toHaveBeenCalledWith(LEFT);

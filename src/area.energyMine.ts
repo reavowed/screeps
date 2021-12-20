@@ -69,8 +69,8 @@ class SingleChild implements MiningPositionChild {
 
     moveMinerIn(miner: Miner) {
         miner.move(this.directionFromMainPosition);
-        miner.memory.isMain = false;
         miner.memory.childIndex = this.index;
+        delete miner.memory.isMain;
     }
 
     rebalance() {}
@@ -116,9 +116,9 @@ class DoubleChild implements MiningPositionChild {
 
     moveMinerIn(miner: Miner) {
         miner.move(this.directionFromMainPosition);
-        miner.memory.isMain = false;
         miner.memory.childIndex = this.index;
-        miner.memory.isSecondary = false;
+        delete miner.memory.isMain;
+        delete miner.memory.isSecondary;
 
         if (this.primaryMiner) {
             this.primaryMiner.move(this.directionFromFirstChild);
