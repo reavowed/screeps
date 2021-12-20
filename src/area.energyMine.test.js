@@ -131,7 +131,7 @@ test('pick a central mining space against a wall', () => {
     expect(energyMine.memory.miningPositionChildren).toEqual([RIGHT, LEFT]);
 });
 
-test('pick an offset central mining space against a wall', () => {
+test('pick an DirectionOffset central mining space against a wall', () => {
     const room = createRoomWithWalls([
         [29, 21], [30, 21], [31, 21],
         [29, 22], [30, 22], [31, 22]

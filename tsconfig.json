@@ -1,0 +1,9 @@
+{
+  "include": [
+    "src/main.ts"
+  ],
+  "compilerOptions": {
+    "strict": true,
+    "target": "es5"
+  }
+}
