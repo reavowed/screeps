@@ -74,7 +74,9 @@ export default class Colony {
             spawnId: spawn.id,
             nextCreepId: 1
         };
-        const energyMines = _.map(room.find(FIND_SOURCES), source => EnergyMine.initialiseMemory(source, spawn));
+        const energyMines = _.sortBy(
+            _.map(room.find(FIND_SOURCES), source => EnergyMine.initialiseMemory(source, spawn)),
+            m => m.pathToMiningPosition.length);
 
         return {
             type: "colony",
