@@ -1,15 +1,14 @@
-import {MovementOverseer, MovementOverseerMemory} from "./movementOverseer";
+import {MovementOverseer, MovementOverseerFactory, MovementOverseerMemory} from "./movementOverseer";
 import {CreepOrder, Nest, NestMemory} from "./area.nest";
 import {EnergyMine, EnergyMineMemory} from "./area.energyMine";
 import * as _ from "lodash";
 import {Carrier, CarrierMemory, CarrierSpec} from "./creeps/carrier";
 import {Miner, MinerMemory} from "./creeps/miner";
 import {isDefined} from "./utils";
+import {Log} from "./log"
+import {MapUtils} from "./utils.map";
 
-const Log = require("./log");
-const MapUtils = require("./utils.map");
-
-interface ColonyMemory extends RoomMemory {
+export interface ColonyMemory extends RoomMemory {
     type: "colony",
     movement: MovementOverseerMemory;
     nest: NestMemory,
@@ -24,10 +23,10 @@ export default class Colony {
     readonly energyMines: EnergyMine[];
     readonly carrier: Carrier;
 
-    constructor(room: Room, memory: ColonyMemory, creeps: Creep[]) {
+    constructor(room: Room, memory: ColonyMemory, creeps: Creep[], movementOverseerFactory: MovementOverseerFactory) {
         this.room = room;
         this.memory = memory;
-        this.movementOverseer = new MovementOverseer(this, this.memory.movement);
+        this.movementOverseer = movementOverseerFactory.create(this);
         this.nest = new Nest(this, this.memory.nest);
         this.energyMines = this.createEnergyMines(creeps);
         this.carrier = _.find(creeps, c => c.memory.role == "carrier") as Carrier;
@@ -52,7 +51,7 @@ export default class Colony {
             room.memory as ColonyMemory :
             this.initialiseMemory(room);
         if (memory) {
-            return new Colony(room, memory, creeps);
+            return new Colony(room, memory, creeps, new MovementOverseerFactory());
         }
     }
 
@@ -113,7 +112,7 @@ export default class Colony {
                 if (recurse) this.moveCarrierToSpawn(false);
             }
         } else {
-            this.carrier.moveByPath(energyMine.memory.pathToMiningPosition);
+            this.movementOverseer.moveCreepByPath(this.carrier, energyMine.memory.pathToMiningPosition);
         }
     }
 
@@ -127,7 +126,7 @@ export default class Colony {
             // Wait for spawning creep
         } else {
             const energyMine = this.energyMines[this.carrier.memory.mineIndex];
-            this.carrier.moveByPath(energyMine.memory.pathToMiningPosition);
+            this.movementOverseer.moveCreepBackwardsByPath(this.carrier, energyMine.memory.pathToMiningPosition);
         }
     }
 

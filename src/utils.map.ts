@@ -29,8 +29,8 @@ export class Direction {
     }
 }
 
-class MapUtils {
-    private static directionsByConstant: Record<DirectionConstant, Direction> = {
+export class MapUtils {
+    static directionsByConstant: Record<DirectionConstant, Direction> = {
         [TOP]: new Direction(0, -1, TOP),
         [TOP_RIGHT]: new Direction(1, -1, TOP_RIGHT) ,
         [RIGHT]: new Direction(1, 0, RIGHT) ,
@@ -40,8 +40,8 @@ class MapUtils {
         [LEFT]: new Direction(-1, 0, LEFT) ,
         [TOP_LEFT]: new Direction(-1, -1, TOP_LEFT)
     };
-    private static allDirections: Direction[] = _.values(MapUtils.directionsByConstant);
-    private static directionsByOffset: any = {
+    static allDirections: Direction[] = _.values(MapUtils.directionsByConstant);
+    static directionsByOffset: any = {
         [-1]: {
             [-1]: MapUtils.directionsByConstant[TOP_LEFT],
             0: MapUtils.directionsByConstant[LEFT],
@@ -86,7 +86,7 @@ class MapUtils {
     }
 
     static reverseDirection(direction: Direction): Direction {
-        return this.mapDirection(direction, this.reverseDirectionConstant);
+        return this.mapDirection(direction, c => this.reverseDirectionConstant(c));
     }
 
     static reverseDirectionConstant(direction: DirectionConstant): DirectionConstant {
@@ -164,5 +164,3 @@ class MapUtils {
         return reversedPath;
     }
 }
-
-module.exports = MapUtils;

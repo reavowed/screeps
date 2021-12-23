@@ -1,12 +1,10 @@
-import {Position} from "./utils.map";
+import {MapUtils, Position} from "./utils.map";
 import * as _ from "lodash";
 import Colony from "./room.colony";
 import {Miner, MinerMemory, MinerSpec} from "./creeps/miner";
 import {isDefined} from "./utils";
 import {CreepOrder} from "./area.nest";
-
-const MapUtils = require("./utils.map");
-const Searcher = require("./searcher");
+import {Searcher} from "./searcher";
 
 export interface EnergyMineMemory {
     sourceId: Id<Source>
@@ -191,7 +189,7 @@ export class EnergyMine {
     static evaluateMiningPosition(candidatePosition: Position, allPossibleMiningPositions: Position[], spawn: StructureSpawn): PositionEvaluation | undefined {
         const adjacentMiningPositions = MapUtils.filterAdjacentSpaces(candidatePosition, allPossibleMiningPositions);
         let path = new Searcher(spawn.room, spawn.pos, candidatePosition).avoidingPositions(adjacentMiningPositions).findSinglePath();
-        if (path) {
+        if (path !== ERR_NO_PATH) {
             const { numberOfChildren, childrenType, childrenDirections } = this.getBestChildren(candidatePosition, allPossibleMiningPositions, spawn)
             return {
                 position: candidatePosition,

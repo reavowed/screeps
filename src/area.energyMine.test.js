@@ -2,20 +2,13 @@ import './globalsForTests';
 import sinon from 'sinon';
 import {EnergyMine} from './area.energyMine';
 import {createRoomWithWalls} from './search.test.common';
+import {randomId} from "./testUtils";
 
 beforeEach(() => {
     global.Game = {};
     Game.getObjectById = sinon.stub();
 });
 
-function randomId() {
-    const buffer = new ArrayBuffer(8);
-    const floatArray = new Float64Array(buffer);
-    floatArray[0] = Math.random();
-    return [...new Uint8Array (buffer).slice(0, 4)]
-        .map (b => b.toString(16).padStart (2, "0"))
-        .join ("");
-}
 
 function createSource(room = room, x, y) {
     const source = {

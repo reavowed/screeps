@@ -1,9 +1,15 @@
 import Colony from "./room.colony";
-import {Position} from "./utils.map";
+import {MapUtils, Position} from "./utils.map";
 
 const Searcher = require("./searcher");
 
 export interface MovementOverseerMemory {}
+
+export class MovementOverseerFactory {
+    create(colony: Colony): MovementOverseer {
+        return new MovementOverseer(colony, colony.memory.movement);
+    }
+}
 
 export class MovementOverseer {
     private readonly colony: Colony;
@@ -26,5 +32,13 @@ export class MovementOverseer {
             };
             creep.moveByPath(path);
         }
+    }
+
+    moveCreepByPath(creep: Creep, path: PathStep[]): void {
+        creep.moveByPath(path);
+    }
+
+    moveCreepBackwardsByPath(creep: Creep, path: PathStep[]): void {
+        this.moveCreepByPath(creep, MapUtils.reversePath(path));
     }
 };

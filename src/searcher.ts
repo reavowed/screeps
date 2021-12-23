@@ -1,7 +1,7 @@
 import * as _ from "lodash";
-const MapUtils = require("./utils.map");
+import {Direction, MapUtils, Position} from "./utils.map";
 
-function getPreferredDirections(source, target) {
+function getPreferredDirections(source: Position, target: Position): Direction[] {
     const direction = MapUtils.getGeneralDirection(source, target);
     if (!direction) {
         return [];
@@ -18,11 +18,24 @@ function getPreferredDirections(source, target) {
     ];
 }
 
-function isInBounds(position) {
+function isInBounds(position: Position): boolean {
     return position.x > 0 && position.x < 49 && position.y > 0 && position.y < 49;
 }
 
-function buildPath(node) {
+interface SearchNode {
+    parentNode: SearchNode | null
+    position: Position
+    estimatedCost: number
+    costSoFar: number
+    manhattanDistance: number
+    chebyshevDistance: number
+    nextDirections: Direction[]
+}
+interface SearchNodeWithCounter extends SearchNode {
+    counter: number
+}
+
+function buildPath(node: SearchNode): PathStep[] | ERR_NO_PATH {
     const path = [];
     while (node.parentNode) {
         const direction = MapUtils.getExactDirection(node.parentNode.position, node.position);
@@ -39,20 +52,23 @@ function buildPath(node) {
         }
         node = node.parentNode;
     }
-    if (!path.length) {
+    if (path.length) {
         return ERR_NO_PATH;
     }
     return path;
 }
 
 class Queue {
+    private internalArray: SearchNodeWithCounter[];
+    private size: number;
+    private counter: number;
     constructor() {
         this.internalArray = [];
         this.size = 0;
         this.counter = 1;
     }
 
-    isHigherPriority(a, b) {
+    isHigherPriority(a: SearchNodeWithCounter, b: SearchNodeWithCounter) {
         return a.estimatedCost < b.estimatedCost ||
             (a.estimatedCost === b.estimatedCost && (
                 a.manhattanDistance < b.manhattanDistance || (
@@ -60,21 +76,24 @@ class Queue {
                 a.counter > b.counter)))
     }
 
-    add(node) {
-        node.counter = this.counter++;
+    add(node: SearchNode) {
         const index = this.size++;
-        this.internalArray[index] = node;
+        this.internalArray[index] = {
+            ...node,
+            counter: this.counter++
+        };
         this.percolateUp(index);
     }
 
-    peek() {
-        if (this.size === 0) return undefined;
+    peek(): SearchNode | void {
+        if (this.size === 0)
+            return;
         return this.internalArray[0];
     }
 
-    pop() {
+    pop(): SearchNode | void {
         if (this.size === 0)
-            return undefined;
+            return;
         const value = this.internalArray[0];
         if (this.size > 1) {
             this.internalArray[0] = this.internalArray[--this.size];
@@ -85,7 +104,7 @@ class Queue {
         return value;
     }
 
-    update(position, f) {
+    update(position: Position, f: (node: SearchNodeWithCounter) => SearchNodeWithCounter | void): boolean {
         for (let index = 0; index < this.size; ++index) {
             const value = this.internalArray[index];
             if (value.position.x === position.x && value.position.y === position.y) {
@@ -100,7 +119,7 @@ class Queue {
         return false;
     };
 
-    percolateUp(index) {
+    percolateUp(index: number) {
         const value = this.internalArray[index];
         while (index > 0) {
             const parentIndex = (index - 1) >> 1;
@@ -114,7 +133,7 @@ class Queue {
         this.internalArray[index] = value;
     }
 
-    percolateDown(index) {
+    percolateDown(index: number) {
         const value = this.internalArray[index];
         while (index < (this.size >>> 1)) {
             const leftChildIndex = (index << 1) + 1;
@@ -136,8 +155,17 @@ class Queue {
     }
 }
 
-class Searcher {
-    constructor(room, source, target) {
+export class Searcher {
+    private readonly room: Room;
+    private readonly source: Position;
+    private readonly target: Position;
+    private readonly queue: Queue;
+    private readonly closedStatus: Uint8Array;
+    private readonly closedNodes: SearchNode[];
+    private readonly costs: Uint8Array;
+    private targetRange: number;
+
+    constructor(room: Room, source: Position, target: Position) {
         this.room = room;
         this.source = source;
         this.target = target;
@@ -145,69 +173,70 @@ class Searcher {
         this.closedStatus = new Uint8Array(2500);
         this.closedNodes = [];
         this.targetRange = 0;
-        this.loadCosts();
+        this.costs = this.loadCosts();
     }
 
-    addOffset(position, dx, dy) {
-        return this.room.getPositionAt(position.x + dx, position.y + dy);
+    addOffset(position: Position, dx: number, dy: number): RoomPosition {
+        return this.room.getPositionAt(position.x + dx, position.y + dy)!;
     }
 
-    loadCosts() {
-        if (!this.room.terrainCosts) {
-            this.room.terrainCosts = new Uint8Array(2500);
+    loadCosts(): Uint8Array {
+        if (!(this.room as any).costs) {
+            const terrainCosts = new Uint8Array(2500);
+            (this.room as any).costs = terrainCosts;
             const terrain = this.room.getTerrain();
             for (let x = 0; x < 50; ++x) {
                 for (let y = 0; y < 50; ++y) {
                     switch (terrain.get(x, y)) {
                         case TERRAIN_MASK_WALL:
-                            this.room.terrainCosts[y * 50 + x] = 255;
+                            terrainCosts[y * 50 + x] = 255;
                             break;
                         case TERRAIN_MASK_SWAMP:
-                            this.room.terrainCosts[y * 50 + x] = 10;
+                            terrainCosts[y * 50 + x] = 10;
                             break;
                         case 0:
-                            this.room.terrainCosts[y * 50 + x] = 2;
+                            terrainCosts[y * 50 + x] = 2;
                             break;
                     }
                 }
             }
         }
-        this.costs = this.room.terrainCosts.slice(0);
+        return (this.room as any).costs.slice(0);
     }
 
-    avoidingPositions(positionsToAvoid) {
+    avoidingPositions(positionsToAvoid: Position[]): Searcher {
         _.forEach(positionsToAvoid, ({x, y}) => this.costs[y * 50 + x] = 255);
         return this;
     }
 
-    withTargetRange(targetRange) {
+    withTargetRange(targetRange: number): Searcher {
         this.targetRange = targetRange;
         return this;
     }
 
-    isGoal(position) {
+    isGoal(position: Position): boolean {
         return MapUtils.getChebyshevDistance(position, this.target) <= this.targetRange;
     }
 
-    isObstructed(position) {
+    isObstructed(position: Position): boolean {
         return !isInBounds(position) || this.getCost(position) === 255;
     }
 
-    getCost(position) {
+    getCost(position: Position): number {
         return this.costs[position.y * 50 + position.x];
     }
 
-    close(node) {
+    close(node: SearchNode) {
         const {position} = node;
         this.closedNodes.push(node);
         this.closedStatus[position.y * 50 + position.x] = 1;
     }
 
-    isClosed(position) {
+    isClosed(position: Position): boolean {
         return this.closedStatus[position.y * 50 + position.x] === 1;
     }
 
-    addNode(position, parentNode, costSoFar, nextDirections) {
+    addNode(position: Position, parentNode: SearchNode | null, costSoFar: number, nextDirections: Direction[]) {
         if (this.isClosed(position)) {
             return;
         }
@@ -219,7 +248,12 @@ class Searcher {
             if (estimatedCost < node.estimatedCost) {
                 return {
                     ...node,
-                    parentNode, costSoFar, nextDirections, chebyshevDistance, manhattanDistance, estimatedCost
+                    parentNode,
+                    costSoFar,
+                    nextDirections,
+                    chebyshevDistance,
+                    manhattanDistance,
+                    estimatedCost
                 };
             }
         });
@@ -236,7 +270,7 @@ class Searcher {
         }
     }
 
-    searchFromNode(currentNode, direction) {
+    searchFromNode(currentNode: SearchNode, direction: Direction) {
         const {dx, dy} = direction;
         const neighbourPosition = direction.addToPosition(currentNode.position);
         if (this.isObstructed(neighbourPosition)) {
@@ -246,7 +280,7 @@ class Searcher {
         const costSoFar = currentNode.costSoFar + neighbourCost;
 
         const nextDirections = [direction];
-        const addIfForced = (travelPosition, alternativePosition, direction) => {
+        const addIfForced = (travelPosition: Position, alternativePosition: Position, direction: Direction) => {
             if (!this.isObstructed(travelPosition) && this.getCost(alternativePosition) > neighbourCost) {
                 nextDirections.push(direction);
             }
@@ -270,7 +304,7 @@ class Searcher {
         this.addNode(neighbourPosition, currentNode, costSoFar, nextDirections);
     }
 
-    findGoalNode() {
+    findGoalNode(): SearchNode | ERR_NO_PATH {
         this.addNode(this.source, null, 0, getPreferredDirections(this.source, this.target));
         let currentNode;
         while (true) {
@@ -282,7 +316,7 @@ class Searcher {
             if (this.isGoal(currentNode.position)) {
                 return currentNode;
             }
-            const direction = currentNode.nextDirections.shift();
+            const direction = currentNode.nextDirections.shift()!;
             if (currentNode.nextDirections.length === 0) {
                 this.queue.pop();
             }
@@ -290,7 +324,7 @@ class Searcher {
         }
     }
 
-    findAllGoalNodes() {
+    findAllGoalNodes(): SearchNode[] {
         const results = [];
         this.addNode(this.source, null, 0, getPreferredDirections(this.source, this.target));
         let currentNode;
@@ -303,7 +337,7 @@ class Searcher {
             if (this.isGoal(currentNode.position) && !_.contains(results, currentNode)) {
                 results.push(currentNode);
             }
-            const direction = currentNode.nextDirections.shift();
+            const direction = currentNode.nextDirections.shift()!;
             if (currentNode.nextDirections.length === 0) {
                 this.queue.pop();
             }
@@ -311,29 +345,27 @@ class Searcher {
         }
     }
 
-    findSinglePath() {
+    findSinglePath(): PathStep[] | ERR_NO_PATH {
         const node = this.findGoalNode();
-        if (!(node < 0)) {
+        if (node !== ERR_NO_PATH) {
             return buildPath(node);
         }
         return node;
     }
 
-    findAllPaths() {
+    findAllPaths(): (PathStep[] | ERR_NO_PATH)[] {
         return _.map(this.findAllGoalNodes(), buildPath);
     }
 
 
-    findPathLength() {
+    findPathLength(): number | void {
         const node = this.findGoalNode();
-        if (!(node < 0)) {
+        if (node !== ERR_NO_PATH) {
             return node.costSoFar / 2;
         }
     }
 
-    static findPathLength(room, source, target) {
+    static findPathLength(room: Room, source: Position, target: Position) {
         return new Searcher(room, source, target).findPathLength();
     }
 }
-
-module.exports = Searcher;
