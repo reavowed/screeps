@@ -356,6 +356,9 @@ export class EnergyMine {
 
     getAllCreepOrders(): CreepOrder<MinerMemory>[] {
         const numberOfMinersToRequest = this.miningPositionChildren.length + 1 - this.allMiners.length;
-        return _.fill(Array(numberOfMinersToRequest), this.getFirstMinerCreepOrder());
+        if (numberOfMinersToRequest > 0)
+            return _.fill(Array(numberOfMinersToRequest), this.getFirstMinerCreepOrder());
+        else
+            return [];
     }
 }
