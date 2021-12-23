@@ -52,9 +52,6 @@ function buildPath(node: SearchNode): PathStep[] | ERR_NO_PATH {
         }
         node = node.parentNode;
     }
-    if (path.length) {
-        return ERR_NO_PATH;
-    }
     return path;
 }
 

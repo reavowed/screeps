@@ -36,7 +36,7 @@ function createEnergyMine(room, source, spawn, memory = {}, creeps = []) {
             spawn
         },
         movementOverseer: {
-            moveCreep: sinon.spy()
+            moveCreepByPath: sinon.spy()
         }
     };
     memory = EnergyMine.initialiseMemory(source, spawn);
@@ -143,7 +143,7 @@ test('delegate a distant miner to the movement overseer and continue moving', ()
     const {energyMine} = createEnergyMineWithTwoSingleChildren([creep]);
     energyMine.runCreeps();
 
-    expect(energyMine.colony.movementOverseer.moveCreep).toHaveBeenCalledWith(creep, {x: 30, y: 20});
+    expect(energyMine.colony.movementOverseer.moveCreepByPath).toHaveBeenCalledWith(creep, energyMine.memory.pathToMiningPosition);
     expect(creep.memory.task).toBe("move");
 });
 
@@ -171,7 +171,7 @@ test('move a close miner to the mining position and switch roles', () => {
     energyMine.runCreeps();
 
     expect(creep.move).toHaveBeenCalledWith(BOTTOM);
-    expect(energyMine.colony.movementOverseer.moveCreep).toHaveBeenCalledTimes(0);
+    expect(energyMine.colony.movementOverseer.moveCreepByPath).toHaveBeenCalledTimes(0);
     expect(creep.memory.task).toBe("mine");
     expect(creep.memory.isMain).toBe(true);
 });

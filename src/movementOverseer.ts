@@ -1,7 +1,6 @@
 import Colony from "./room.colony";
 import {MapUtils, Position} from "./utils.map";
-
-const Searcher = require("./searcher");
+import {Searcher} from "./searcher";
 
 export interface MovementOverseerMemory {}
 
@@ -26,11 +25,13 @@ export class MovementOverseer {
             creep.memory.move.tick = Game.time;
         } else {
             const path = new Searcher(creep.room, creep.pos, targetPosition).findSinglePath();
-            creep.memory.move = {
-                path,
-                tick: Game.time
-            };
-            creep.moveByPath(path);
+            if (path !== ERR_NO_PATH) {
+                creep.memory.move = {
+                    path,
+                    tick: Game.time
+                };
+                creep.moveByPath(path);
+            }
         }
     }
 

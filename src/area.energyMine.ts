@@ -308,7 +308,7 @@ export class EnergyMine {
     runMover(mover: Miner) {
         if (mover.fatigue === 0) {
             if (MapUtils.getChebyshevDistance(mover.pos, this.memory.miningPosition) > 1) {
-                this.colony.movementOverseer.moveCreep(mover, this.memory.miningPosition);
+                this.colony.movementOverseer.moveCreepByPath(mover, this.memory.pathToMiningPosition);
             } else if (MapUtils.getChebyshevDistance(mover.pos, this.memory.miningPosition) === 1) {
                 this.clearMainPosition();
                 mover.move(MapUtils.getExactDirection(mover.pos, this.memory.miningPosition).constant);

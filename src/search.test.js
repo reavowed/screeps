@@ -1,6 +1,6 @@
 import './globalsForTests';
-import Searcher from './searcher';
 import {createRoomWithWalls} from './search.test.common';
+import {Searcher} from "./searcher";
 
 test('find a simple path', function () {
     const source = {x: 23, y: 14};
