@@ -1,110 +1,135 @@
 import './globalsForTests';
-import sinon from 'sinon';
-import {EnergyMine} from './area.energyMine';
+import {EnergyMine, EnergyMineMemory} from './area.energyMine';
 import {createRoomWithWalls} from './search.test.common';
 import {randomId} from "./testUtils";
+import {any, mock, verify, when} from "./betterMock/betterMock";
+import Colony from "./room.colony";
+import {Nest} from "./area.nest";
+import {MovementOverseer} from "./movementOverseer";
+import * as _ from "lodash";
+import {Miner} from "./creeps/miner";
+import {isDefined} from "./utils";
+import {Position} from "./utils.map";
 
 beforeEach(() => {
-    global.Game = {};
-    Game.getObjectById = sinon.stub();
+    global.Game = mock<Game>();
 });
 
-
-function createSource(room = room, x, y) {
-    const source = {
-        id: randomId(),
-        room,
-        pos: {x, y}
-    };
-    Game.getObjectById
-        .withArgs(source.id)
-        .returns(source);
+function createSource(room: Room, x: number, y: number) {
+    const source = mock<Source>();
+    const sourceId = randomId() as Id<Source>;
+    when(source.id).thenReturn(sourceId);
+    when(source.pos).thenReturn({x, y, roomName: room.name} as RoomPosition);
+    when(source.room).thenReturn(room);
+    when(global.Game.getObjectById(sourceId)).thenReturn(source);
     return source;
 }
 
-function createSpawn(room, x, y) {
-    return {
-        pos: {x, y},
-        room
-    };
+function createSpawn(room: Room, x: number, y: number): StructureSpawn {
+    const spawn = mock<StructureSpawn>();
+    const spawnId = randomId() as Id<StructureSpawn>;
+    when(spawn.id).thenReturn(spawnId);
+    when(spawn.pos).thenReturn({x, y, roomName: room.name} as RoomPosition);
+    when(spawn.room).thenReturn(room);
+    when(global.Game.getObjectById(spawn.id)).thenReturn(spawn);
+    return spawn;
 }
 
-function createEnergyMine(room, source, spawn, memory = {}, creeps = []) {
-    const colony = {
-        room,
-        nest: {
-            spawn
-        },
-        movementOverseer: {
-            moveCreepByPath: sinon.spy()
-        }
-    };
-    memory = EnergyMine.initialiseMemory(source, spawn);
+function createEnergyMine(room: Room, source: Source, spawn: StructureSpawn, memory?: EnergyMineMemory, creeps: Creep[] = []) {
+    const colony = mock<Colony>();
+    when(colony.room).thenReturn(room);
+    when(colony.nest).thenReturn(mock<Nest>());
+    when(colony.movementOverseer).thenReturn(mock<MovementOverseer>());
+    when(colony.getCreep(any())).thenAnswer((name: String) => _.find(creeps, {name}));
+    memory = memory || EnergyMine.initialiseMemory(source, spawn);
     return new EnergyMine(colony, memory, 0, creeps);
 }
 
-function createEnergyMineWithTwoSingleChildren(creeps) {
+interface TwoChildrenOptions {
+    mainMiner?: Creep
+    firstChildMiner?: Creep
+    secondChildMiner?: Creep
+    approachingMiner?: Creep
+}
+
+function createEnergyMineWithTwoSingleChildren(options: TwoChildrenOptions = {}) {
     const room = createRoomWithWalls([
         [29, 21], [30, 21], [31, 21],
         [29, 22], [30, 22], [31, 22]
     ]);
     const source = createSource(room, 30, 21);
     const spawn = createSpawn(room, 30, 15);
-    const memory = {
-        miningPosition: {x: 30, y: 20},
-        miningPositionChildren: [RIGHT, LEFT],
-        initialised: true
+    const memory: EnergyMineMemory = {
+        sourceId: source.id,
+        miningPosition: {
+            minerName: options.mainMiner && options.mainMiner.name,
+            position: {x: 30, y: 20},
+            path: [],
+            children: [{
+                directionFromParent: RIGHT,
+                minerName: options.firstChildMiner && options.firstChildMiner.name,
+                children: []
+            },{
+                directionFromParent: LEFT,
+                minerName: options.secondChildMiner && options.secondChildMiner.name,
+                children: []
+            }]
+        },
+        approachingMiners: options.approachingMiner ? [options.approachingMiner.name] : []
     };
+    const creeps = [options.mainMiner, options.firstChildMiner, options.secondChildMiner, options.approachingMiner].filter(isDefined);
 
-    const energyMine = createEnergyMine(room, source, spawn, memory, creeps);
-
-    return {room, source, spawn, energyMine};
+    return createEnergyMine(room, source, spawn, memory, creeps);
 }
 
-function createEnergyMineWithADoubleChild(creeps) {
+interface DoubleChildOptions {
+    mainMiner?: Miner
+    outerChildMiner?: Miner
+    innerChildMiner?: Miner
+}
+function createEnergyMineWithADoubleChild(options: DoubleChildOptions = {}) {
     const room = createRoomWithWalls([
         [29, 21], [30, 21], [31, 21],
         [29, 22], [30, 22], [31, 22]
     ]);
     const source = createSource(room, 30, 21);
     const spawn = createSpawn(room, 24, 15);
-    const memory = {
-        miningPosition: {x: 29, y: 20},
-        miningPositionChildren: [[RIGHT, RIGHT]],
-        initialised: true
+    const memory: EnergyMineMemory = {
+        sourceId: source.id,
+        miningPosition: {
+            minerName: options.mainMiner && options.mainMiner.name,
+            position: {x: 29, y: 20},
+            path: [],
+            children: [{
+                directionFromParent: RIGHT,
+                minerName: options.outerChildMiner && options.outerChildMiner.name,
+                children: [{
+                    directionFromParent: RIGHT,
+                    minerName: options.innerChildMiner && options.innerChildMiner.name,
+                    children: []
+                }]
+            }]
+        },
+        approachingMiners: []
     };
+    const creeps = [options.mainMiner, options.outerChildMiner, options.innerChildMiner].filter(isDefined);
 
     const energyMine = createEnergyMine(room, source, spawn, memory, creeps);
 
     return {room, source, spawn, energyMine};
 }
 
-function createMiner() {
-    const miner = {
-        pos: {x: 30, y: 20},
-        memory: {},
-        fatigue: 0,
-        move: sinon.mock(),
-        harvest: sinon.mock(),
-        drop: sinon.mock(),
-        transfer: sinon.mock(),
-        store: {
-            getUsedCapacity: sinon.mock()
-        }
-    };
-    miner.store.getUsedCapacity.withArgs(RESOURCE_ENERGY).returns(0);
-    miner.withStoredEnergy = (amount) => {
-        miner.store.getUsedCapacity.withArgs(RESOURCE_ENERGY).returns(amount);
-        return miner;
-    };
-    miner.withMemory = (memory) => {
-        miner.memory = memory;
-        return miner;
-    };
-    miner.atPosition = (position) => {
-        miner.pos = position;
-        return miner;
-    };
+interface MinerOptions {
+    position: Position,
+    fatigue?: number
+}
+function createMiner(options: MinerOptions): Creep {
+    const miner = mock<Creep>();
+    when(miner.name).thenReturn(randomId());
+    when(miner.pos).thenReturn((options.position || {x: 30, y: 20}) as RoomPosition);
+    when(miner.fatigue).thenReturn(options.fatigue || 0);
+    const store = mock<StoreDefinition>();
+    when(store.getUsedCapacity(RESOURCE_ENERGY)).thenReturn(0);
     return miner;
 }
 
@@ -118,9 +143,9 @@ test('pick a central mining space against a wall', () => {
 
     const energyMine = createEnergyMine(room, source, spawn);
 
-    expect(energyMine.memory.miningPosition).toEqual({x: 30, y: 20});
-    expect(energyMine.memory.miningPositionChildrenType).toEqual("twoSingle")
-    expect(energyMine.memory.miningPositionChildrenDirections).toEqual([RIGHT, LEFT]);
+    expect(energyMine.memory.miningPosition.position).toEqual({x: 30, y: 20});
+    expect(energyMine.memory.miningPosition.children).toHaveLength(2);
+    expect(energyMine.memory.miningPosition.children.map(c => c.directionFromParent)).toEqual([RIGHT, LEFT]);
 });
 
 test('pick an offset central mining space against a wall', () => {
@@ -133,18 +158,30 @@ test('pick an offset central mining space against a wall', () => {
 
     const energyMine = createEnergyMine(room, source, spawn);
 
-    expect(energyMine.memory.miningPosition).toEqual({x: 29, y: 20});
-    expect(energyMine.memory.miningPositionChildrenType).toEqual("double")
-    expect(energyMine.memory.miningPositionChildrenDirections).toEqual([RIGHT, RIGHT]);
+    expect(energyMine.memory.miningPosition.position).toEqual({x: 29, y: 20});
+    expect(energyMine.memory.miningPosition.children).toHaveLength(1);
+    expect(energyMine.memory.miningPosition.children[0].directionFromParent).toEqual(RIGHT);
+    expect(energyMine.memory.miningPosition.children[0].children).toHaveLength(1);
+    expect(energyMine.memory.miningPosition.children[0].children[0].directionFromParent).toEqual(RIGHT);
 });
 
 test('delegate a distant miner to the movement overseer and continue moving', () => {
-    const creep = createMiner().withMemory({task: "move"}).atPosition({x: 30, y: 16});
-    const {energyMine} = createEnergyMineWithTwoSingleChildren([creep]);
+    const approachingMiner = createMiner({position: {x: 30, y: 16}});
+    const energyMine = createEnergyMineWithTwoSingleChildren({approachingMiner});
     energyMine.runCreeps();
 
-    expect(energyMine.colony.movementOverseer.moveCreepByPath).toHaveBeenCalledWith(creep, energyMine.memory.pathToMiningPosition);
-    expect(creep.memory.task).toBe("move");
+    verify(energyMine.colony.movementOverseer).moveCreepByPath(approachingMiner, energyMine.memory.miningPosition.path);
+    expect(energyMine.memory.approachingMiners).toContain(approachingMiner.name);
+});
+
+test('move a nearby miner directly and transfer to mining position', () => {
+    const approachingMiner = createMiner({position: {x: 30, y: 19}});
+    const energyMine = createEnergyMineWithTwoSingleChildren({approachingMiner});
+    energyMine.runCreeps();
+
+    verify(approachingMiner).move(RIGHT);
+    expect(energyMine.memory.approachingMiners).toHaveLength(0);
+    expect(energyMine.memory.miningPosition.minerName).toBe(approachingMiner.name);
 });
 
 test('run all miners in two single children', () => {

@@ -1,4 +1,4 @@
-import {MapUtils, Position} from "./utils.map";
+import {Direction, MapUtils, Position} from "./utils.map";
 import * as _ from "lodash";
 import Colony from "./room.colony";
 import {Miner, MinerMemory, MinerSpec} from "./creeps/miner";
@@ -8,127 +8,125 @@ import {Searcher} from "./searcher";
 
 export interface EnergyMineMemory {
     sourceId: Id<Source>
-    miningPosition: Position
-    pathToMiningPosition: PathStep[]
-    miningPositionChildrenType: ChildrenType
-    miningPositionChildrenDirections: DirectionConstant[]
+    miningPosition: MainMiningPositionMemory
+    approachingMiners: string[]
+}
+interface MiningPositionMemory {
+    minerName?: string
+    children: ChildMiningPositionMemory[]
+}
+interface MainMiningPositionMemory extends MiningPositionMemory {
+    position: Position
+    path: PathStep[]
+}
+interface ChildMiningPositionMemory extends MiningPositionMemory {
+    directionFromParent: DirectionConstant
 }
 
-interface MiningPositionChild {
-    get hasSpace(): boolean
-    get miners(): Miner[]
-    get canReoccupyMain(): boolean
-    reoccupyMain(): void
-    moveMinerIn(miner: Miner): void
-    rebalance(): void
-}
-
-type ChildrenType = "single" | "twoSingle" | "double" | "none"
-
-interface PositionEvaluation {
+interface MiningPositionEvaluation {
     position: Position,
-    numberOfChildren: number,
-    childrenType: ChildrenType
-    childrenDirections: DirectionConstant[]
     path: PathStep[],
+    children: ChildMiningPositionMemory[],
     isPlains: boolean
 }
 
-class SingleChild implements MiningPositionChild {
-    private readonly index: number;
-    private readonly directionFromMainPosition: DirectionConstant;
-    private readonly miner?: Miner;
-
-    constructor(index: number, energyMine: EnergyMine) {
-        this.index = index;
-        this.directionFromMainPosition = energyMine.memory.miningPositionChildrenDirections[index];
-        this.miner = _.find(energyMine.miners, m => m.memory.childIndex == index);
+abstract class MiningPosition {
+    readonly energyMine: EnergyMine;
+    readonly memory: MiningPositionMemory;
+    miner?: Creep;
+    readonly children: ChildMiningPosition[]
+    constructor(energyMine: EnergyMine, memory: MiningPositionMemory) {
+        this.energyMine = energyMine;
+        this.memory = memory;
+        this.miner = energyMine.colony.getCreep(memory.minerName) as Miner;
+        this.children = memory.children.map(c => new ChildMiningPosition(energyMine, c, this))
     }
-
-    get hasSpace() {
-        return !this.miner;
-    }
-
-    get miners(): Miner[] {
-        return this.miner ? [this.miner] : [];
-    }
-
-    get canReoccupyMain() {
-        return !!this.miner;
-    }
-
-    reoccupyMain() {
+    get miners(): Creep[] {
+        const miners = _.flatten(this.children.map(c => c.miners));
         if (this.miner) {
-            this.miner.move(MapUtils.reverseDirectionConstant(this.directionFromMainPosition));
-            this.miner.memory.isMain = true;
-            delete this.miner.memory.childIndex;
+            miners.unshift(this.miner);
         }
-    }
-
-    moveMinerIn(miner: Miner) {
-        miner.move(this.directionFromMainPosition);
-        miner.memory.childIndex = this.index;
-        delete miner.memory.isMain;
-    }
-
-    rebalance() {}
-}
-
-class DoubleChild implements MiningPositionChild {
-    readonly index: number;
-    readonly directionFromMainPosition: DirectionConstant;
-    readonly directionFromFirstChild: DirectionConstant;
-    readonly primaryMiner?: Miner;
-    readonly secondaryMiner?: Miner;
-
-    constructor(index: number, energyMine: EnergyMine) {
-        this.index = index;
-        this.directionFromMainPosition = energyMine.memory.miningPositionChildrenDirections[index];
-        this.directionFromFirstChild = energyMine.memory.miningPositionChildrenDirections[index + 1];
-        this.primaryMiner = _.find(energyMine.miners, m => m.memory.childIndex == index && !m.memory.isSecondary);
-        this.secondaryMiner = _.find(energyMine.miners, m => m.memory.childIndex == index && m.memory.isSecondary);
-    }
-
-    get hasSpace() {
-        return !this.primaryMiner || !this.secondaryMiner;
-    }
-
-    get miners() {
-        const miners = [];
-        if (this.primaryMiner) miners.push(this.primaryMiner);
-        if (this.secondaryMiner) miners.push(this.secondaryMiner);
         return miners;
     }
-
-    get canReoccupyMain() {
-        return !!this.primaryMiner;
+    get freeSpaces(): number {
+        const freeSpacesInChildren = _.sum(this.children.map(c => c.freeSpaces));
+        if (this.miner) {
+            return freeSpacesInChildren;
+        } else {
+            return freeSpacesInChildren + 1;
+        }
+    }
+    runCreeps(): void {
+        this.runMiner();
+        this.children.forEach(c => c.runCreeps());
     }
 
-    reoccupyMain() {
-        if (this.primaryMiner) {
-            this.primaryMiner.move(MapUtils.reverseDirectionConstant(this.directionFromMainPosition));
-            this.primaryMiner.memory.isMain = true;
-            delete this.primaryMiner.memory.childIndex;
+    runMiner() {
+        if (this.miner) {
+            this.miner.harvest(this.energyMine.source);
+        }
+    }
+    canAcceptMiner(): boolean {
+        return !this.miner || _.any(this.children, c => c.canAcceptMiner());
+    }
+    abstract getIncomingMinerDirection(miner: Creep): Direction
+    acceptMiner(miner: Creep) {
+        if (this.miner) {
+            const child = _.find(this.children, c => c.canAcceptMiner())!;
+            child.acceptMiner(this.miner);
+            this.miner = miner;
+            this.memory.minerName = miner.name;
+        }
+        miner.move(this.getIncomingMinerDirection(miner).constant);
+    }
+    clearSpaceForMiner() {
+        if (this.miner) {
+            const child = _.find(this.children, c => c.canAcceptMiner())!;
+            child.clearSpaceForMiner();
+            this.miner.move(MapUtils.reverseDirectionConstant(child.directionFromParent.constant));
+        }
+    }
+}
+
+class MainMiningPosition extends MiningPosition {
+    readonly position: RoomPosition;
+
+    constructor(energyMine: EnergyMine, memory: MainMiningPositionMemory) {
+        super(energyMine, memory);
+        this.position = energyMine.colony.room.getPositionAt(memory.position.x, memory.position.y)!;
+    }
+
+    override runMiner() {
+        super.runMiner();
+        if (this.miner && this.miner.store.getUsedCapacity(RESOURCE_ENERGY) > 0) {
+            this.miner.drop(RESOURCE_ENERGY);
         }
     }
 
-    moveMinerIn(miner: Miner) {
-        miner.move(this.directionFromMainPosition);
-        miner.memory.childIndex = this.index;
-        delete miner.memory.isMain;
-        delete miner.memory.isSecondary;
+    override getIncomingMinerDirection(miner: Creep): Direction {
+        return MapUtils.getExactDirection(miner.pos, this.position);
+    }
+}
 
-        if (this.primaryMiner) {
-            this.primaryMiner.move(this.directionFromFirstChild);
-            this.primaryMiner.memory.isSecondary = true;
+class ChildMiningPosition extends MiningPosition {
+    readonly parent: MiningPosition;
+    readonly directionFromParent: Direction
+
+    constructor(energyMine: EnergyMine, memory: ChildMiningPositionMemory, parent: MiningPosition) {
+        super(energyMine, memory);
+        this.parent = parent;
+        this.directionFromParent = MapUtils.directionsByConstant[memory.directionFromParent];
+    }
+
+    override runMiner() {
+        super.runMiner();
+        if (this.miner && this.parent.miner && this.miner.store.getUsedCapacity(RESOURCE_ENERGY) > 0) {
+            this.miner.transfer(this.parent.miner, RESOURCE_ENERGY);
         }
     }
 
-    rebalance() {
-        if (this.secondaryMiner && !this.primaryMiner) {
-            this.secondaryMiner.move(MapUtils.reverseDirectionConstant(this.directionFromFirstChild));
-            this.secondaryMiner.memory.isSecondary = false;
-        }
+    getIncomingMinerDirection(miner: Creep): Direction {
+        return this.directionFromParent;
     }
 }
 
@@ -137,38 +135,16 @@ export class EnergyMine {
     readonly memory: EnergyMineMemory;
     readonly index: number;
     readonly source: Source;
-    readonly movers: Miner[];
-    readonly miners: Miner[];
-    readonly miningPosition: RoomPosition;
-    readonly miningPositionChildren: MiningPositionChild[];
-    readonly mainMiner?: Miner;
+    readonly incomingMiners: Creep[];
+    readonly miningPosition: MainMiningPosition;
 
     constructor(colony: Colony, memory: EnergyMineMemory, index: number, creeps: Creep[]) {
         this.colony = colony;
         this.memory = memory;
         this.index = index;
         this.source = Game.getObjectById(this.memory.sourceId)!;
-        this.movers = _.filter(creeps as Miner[], m => m.memory.task == "move");
-        this.miners = _.filter(creeps as Miner[], m => m.memory.task == "mine");
-        this.miningPosition = this.colony.room.getPositionAt(this.memory.miningPosition.x, this.memory.miningPosition.y)!;
-        this.miningPositionChildren = this.readChildren();
-        this.mainMiner = _.find(this.miners, m => m.memory.isMain);
-    }
-
-    readChildren(): MiningPositionChild[] {
-        switch (this.memory.miningPositionChildrenType) {
-            case "none":
-                return [];
-            case "single":
-                return [new SingleChild(0, this)];
-            case "twoSingle":
-                return [
-                    new SingleChild(0, this),
-                    new SingleChild(1, this)
-                ];
-            case "double":
-                return [new DoubleChild(0, this)];
-        }
+        this.incomingMiners = memory.approachingMiners.map(n => colony.getCreep(n)).filter(isDefined);
+        this.miningPosition = new MainMiningPosition(this, this.memory.miningPosition);
     }
 
     static initialiseMemory(source: Source, spawn: StructureSpawn): EnergyMineMemory {
@@ -176,78 +152,65 @@ export class EnergyMine {
         const positionEvaluations = possibleMiningPositions
             .map((position: Position) => this.evaluateMiningPosition(position, possibleMiningPositions, spawn))
             .filter(isDefined);
-        const {position, path, childrenType, childrenDirections} = this.getBestPositions(positionEvaluations, spawn)[0];
+        const {position, path, children} = this.getBestPositions(positionEvaluations, spawn)[0];
         return {
             sourceId: source.id,
-            miningPosition: position,
-            pathToMiningPosition: path,
-            miningPositionChildrenType: childrenType,
-            miningPositionChildrenDirections: childrenDirections
+            miningPosition: {
+                position,
+                path,
+                children
+            },
+            approachingMiners: []
         }
     }
 
-    static evaluateMiningPosition(candidatePosition: Position, allPossibleMiningPositions: Position[], spawn: StructureSpawn): PositionEvaluation | undefined {
+    static evaluateMiningPosition(candidatePosition: Position, allPossibleMiningPositions: Position[], spawn: StructureSpawn): MiningPositionEvaluation | undefined {
         const adjacentMiningPositions = MapUtils.filterAdjacentSpaces(candidatePosition, allPossibleMiningPositions);
         let path = new Searcher(spawn.room, spawn.pos, candidatePosition).avoidingPositions(adjacentMiningPositions).findSinglePath();
         if (path !== ERR_NO_PATH) {
-            const { numberOfChildren, childrenType, childrenDirections } = this.getBestChildren(candidatePosition, allPossibleMiningPositions, spawn)
+            const children = this.getBestChildren(candidatePosition, allPossibleMiningPositions, spawn)
             return {
                 position: candidatePosition,
-                numberOfChildren,
-                childrenType,
-                childrenDirections,
+                children,
                 path,
                 isPlains: MapUtils.isPlains(spawn.room, candidatePosition)
             }
         }
     }
 
-    static getBestChildren(candidatePosition: Position, allPossibleMiningPositions: Position[], spawn: StructureSpawn): { numberOfChildren: number, childrenType: ChildrenType, childrenDirections: DirectionConstant[] } {
+    static getBestChildren(candidatePosition: Position, allPossibleMiningPositions: Position[], spawn: StructureSpawn): ChildMiningPositionMemory[] {
         const adjacentPositions = MapUtils.filterAdjacentSpaces(candidatePosition, allPossibleMiningPositions);
         if (adjacentPositions.length >= 2) {
-            // 2 direct children
-            const childrenDirections = _.chain(this.orderChildPositions(adjacentPositions, spawn))
+            return _.chain(this.orderChildPositions(adjacentPositions, spawn))
                 .take(2)
                 .map((p: Position) => MapUtils.getExactDirection(candidatePosition, p).constant)
+                .map((directionFromParent: DirectionConstant) => { return {
+                    directionFromParent,
+                    children: []
+                }})
                 .value();
-            return {
-                numberOfChildren: 2,
-                childrenType: "twoSingle",
-                childrenDirections
-            };
         } else if (adjacentPositions.length === 1) {
             const nextAdjacentPositions = _.filter(MapUtils.filterAdjacentSpaces(adjacentPositions[0], allPossibleMiningPositions), (p: Position) => p !== candidatePosition);
             if (nextAdjacentPositions.length) {
-                // single child with it's own child
-                return {
-                    numberOfChildren: 2,
-                    childrenType: "double",
-                    childrenDirections: [
-                        MapUtils.getExactDirection(candidatePosition, adjacentPositions[0]).constant,
-                        MapUtils.getExactDirection(adjacentPositions[0], nextAdjacentPositions[0]).constant
-                    ]
-                };
+                return [{
+                    directionFromParent: MapUtils.getExactDirection(candidatePosition, adjacentPositions[0]).constant,
+                    children: [{
+                        directionFromParent: MapUtils.getExactDirection(adjacentPositions[0], nextAdjacentPositions[0]).constant,
+                        children: []
+                    }]
+                }];
             } else {
-                // single child with no children
-                return {
-                    numberOfChildren: 1,
-                    childrenType: "single",
-                    childrenDirections: [
-                        MapUtils.getExactDirection(candidatePosition, adjacentPositions[0]).constant
-                    ]
-                };
+                return [{
+                    directionFromParent: MapUtils.getExactDirection(candidatePosition, adjacentPositions[0]).constant,
+                    children: []
+                }];
             }
         } else {
-            // no children
-            return {
-                numberOfChildren: 0,
-                childrenType: "none",
-                childrenDirections: []
-            };
+            return [];
         }
     }
 
-    static orderChildPositions(childPositions: Position[], spawn: StructureSpawn) {
+    static orderChildPositions(childPositions: Position[], spawn: StructureSpawn): Position[] {
         return _.sortByAll(
             childPositions,
             [
@@ -256,7 +219,7 @@ export class EnergyMine {
             ]);
     }
 
-    static getBestPositions(positionEvaluations: PositionEvaluation[], spawn: StructureSpawn): PositionEvaluation[] {
+    static getBestPositions(positionEvaluations: MiningPositionEvaluation[], spawn: StructureSpawn): MiningPositionEvaluation[] {
         // TODO: return multiple positions if needed
         const bestPosition = this.sortPositions(positionEvaluations, spawn)[0];
         if (bestPosition) {
@@ -265,83 +228,39 @@ export class EnergyMine {
         return [];
     }
 
-    static sortPositions(positionEvaluations: PositionEvaluation[], spawn: StructureSpawn): PositionEvaluation[] {
+    static sortPositions(positionEvaluations: MiningPositionEvaluation[], spawn: StructureSpawn): MiningPositionEvaluation[] {
         return _.sortByAll(
             positionEvaluations,
             [
-                (e: PositionEvaluation) => -1 * e.numberOfChildren,
-                (e: PositionEvaluation) => e.isPlains ? 0 : 1,
-                (e: PositionEvaluation) => e.path.length,
-                (e: PositionEvaluation) => MapUtils.getManhattanDistance(spawn.pos, e.position)
+                (e: MiningPositionEvaluation) => -1 * this.countChildren(e.children),
+                (e: MiningPositionEvaluation) => e.isPlains ? 0 : 1,
+                (e: MiningPositionEvaluation) => e.path.length,
+                (e: MiningPositionEvaluation) => MapUtils.getManhattanDistance(spawn.pos, e.position)
             ]
         );
     }
 
-    get childMiners() {
-        return _.flatten(_.map(this.miningPositionChildren, c => c.miners));
-    }
-
-    get allMiners() {
-        if (this.mainMiner) {
-            return [this.mainMiner, ...this.childMiners];
-        } else {
-            return this.childMiners;
-        }
+    static countChildren(children: ChildMiningPositionMemory[]): number {
+        return children.length + _.sum(children, c => this.countChildren(c.children));
     }
 
     runCreeps() {
-        this.movers && _.forEach(this.movers, mover => this.runMover(mover));
-        this.runMainMiner();
-        _.forEach(this.miningPositionChildren, child => {
-            _.forEach(child.miners, miner => this.runChildMiner(miner));
-            child.rebalance();
-        });
-        if (!this.mainMiner) {
-            const childWithMiner = _.find(this.miningPositionChildren, child => child.canReoccupyMain);
-            if (childWithMiner) {
-                childWithMiner.reoccupyMain();
-            }
-        }
-
+        this.incomingMiners && _.forEach(this.incomingMiners, mover => this.moveIncomingMiner(mover));
+        this.miningPosition.runCreeps();
     }
 
-    runMover(mover: Miner) {
-        if (mover.fatigue === 0) {
-            if (MapUtils.getChebyshevDistance(mover.pos, this.memory.miningPosition) > 1) {
-                this.colony.movementOverseer.moveCreepByPath(mover, this.memory.pathToMiningPosition);
-            } else if (MapUtils.getChebyshevDistance(mover.pos, this.memory.miningPosition) === 1) {
-                this.clearMainPosition();
-                mover.move(MapUtils.getExactDirection(mover.pos, this.memory.miningPosition).constant);
-                mover.memory.isMain = true;
-                mover.memory.task = "mine";
+    private moveIncomingMiner(miner: Creep) {
+        if (miner.fatigue === 0) {
+            if (MapUtils.getChebyshevDistance(miner.pos, this.memory.miningPosition.position) > 1) {
+                this.colony.movementOverseer.moveCreepByPath(miner, this.memory.miningPosition.path);
+            } else if (MapUtils.getChebyshevDistance(miner.pos, this.memory.miningPosition.position) === 1) {
+                this.miningPosition.acceptMiner(miner);
             }
         }
     }
 
-    runMainMiner() {
-        if (this.mainMiner) {
-            this.mainMiner.harvest(this.source);
-            if (this.mainMiner.store.getUsedCapacity(RESOURCE_ENERGY) > 0) {
-                this.mainMiner.drop(RESOURCE_ENERGY);
-            }
-        }
-    }
-
-    runChildMiner(miner: Miner) {
-        miner.harvest(this.source);
-        if (this.mainMiner && miner.store.getUsedCapacity(RESOURCE_ENERGY) > 0) {
-            miner.transfer(this.mainMiner, RESOURCE_ENERGY);
-        }
-    }
-
-    clearMainPosition() {
-        if (this.mainMiner) {
-            _.find(this.miningPositionChildren, "hasSpace")!.moveMinerIn(this.mainMiner);
-        }
-    }
-
-    get droppedEnergy() {
-        return this.miningPosition.lookFor(LOOK_ENERGY)[0];
+    get droppedEnergy(): Resource<RESOURCE_ENERGY> {
+        return this.miningPosition.position.lookFor(LOOK_ENERGY)[0];
     }
 
     getFirstMinerCreepOrder(): CreepOrder<MinerMemory> {
@@ -349,13 +268,13 @@ export class EnergyMine {
             spec: MinerSpec,
             options: {
                 memory: {mineIndex: this.index, task: "move"},
-                directions: [this.memory.pathToMiningPosition[0].direction]
+                directions: [this.memory.miningPosition.path[0].direction]
             }
         };
     }
 
     getAllCreepOrders(): CreepOrder<MinerMemory>[] {
-        const numberOfMinersToRequest = this.miningPositionChildren.length + 1 - this.allMiners.length;
+        const numberOfMinersToRequest = this.miningPosition.freeSpaces;
         if (numberOfMinersToRequest > 0)
             return _.fill(Array(numberOfMinersToRequest), this.getFirstMinerCreepOrder());
         else

@@ -75,7 +75,7 @@ export default class Colony {
         };
         const energyMines = _.sortBy(
             _.map(room.find(FIND_SOURCES), source => EnergyMine.initialiseMemory(source, spawn)),
-            m => m.pathToMiningPosition.length);
+            m => m.miningPosition.path.length);
 
         return {
             type: "colony",
@@ -83,6 +83,10 @@ export default class Colony {
             nest,
             energyMines
         };
+    }
+
+    getCreep(name?: string): Creep | undefined {
+        if (name) return Game.creeps[name];
     }
 
     runCreeps() {
@@ -104,7 +108,7 @@ export default class Colony {
 
     moveCarrierToMine(recurse = true) {
         const energyMine = this.energyMines[this.carrier.memory.mineIndex];
-        if (MapUtils.getChebyshevDistance(this.carrier.pos, energyMine.miningPosition) === 1) {
+        if (MapUtils.getChebyshevDistance(this.carrier.pos, energyMine.miningPosition.position) === 1) {
             const droppedEnergy = energyMine.droppedEnergy;
             if (droppedEnergy && droppedEnergy.amount >= this.carrier.store.getFreeCapacity()) {
                 this.carrier.pickup(droppedEnergy);
@@ -112,7 +116,7 @@ export default class Colony {
                 if (recurse) this.moveCarrierToSpawn(false);
             }
         } else {
-            this.movementOverseer.moveCreepByPath(this.carrier, energyMine.memory.pathToMiningPosition);
+            this.movementOverseer.moveCreepByPath(this.carrier, energyMine.memory.miningPosition.path);
         }
     }
 
@@ -126,7 +130,7 @@ export default class Colony {
             // Wait for spawning creep
         } else {
             const energyMine = this.energyMines[this.carrier.memory.mineIndex];
-            this.movementOverseer.moveCreepBackwardsByPath(this.carrier, energyMine.memory.pathToMiningPosition);
+            this.movementOverseer.moveCreepBackwardsByPath(this.carrier, energyMine.memory.miningPosition.path);
         }
     }
 
@@ -147,8 +151,8 @@ export default class Colony {
 
     moveCarrierAwayFromSpawn() {
         const energyMine = this.energyMines[this.carrier.memory.mineIndex];
-        if (energyMine.memory.pathToMiningPosition.length > 1) {
-            this.carrier.move(energyMine.memory.pathToMiningPosition[1].direction);
+        if (energyMine.memory.miningPosition.path.length > 1) {
+            this.carrier.move(energyMine.memory.miningPosition.path[1].direction);
             this.carrier.memory.task = "return";
         } else {
             const freeSpace = MapUtils.findAdjacentFreeSpaces(this.room, this.carrier.pos)[0];
@@ -187,7 +191,7 @@ export default class Colony {
                     spec: CarrierSpec,
                     options : {
                         memory: {task: "mine", mineIndex: 0},
-                        directions: [energyMine.memory.pathToMiningPosition[0].direction]
+                        directions: [energyMine.memory.miningPosition.path[0].direction]
                     }
                 }];
             }

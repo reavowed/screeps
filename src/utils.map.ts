@@ -117,10 +117,8 @@ export class MapUtils {
     }
 
     static getRoomTerrain(room: Room): RoomTerrain {
-        if (!(room as any).terrain) {
-            (room as any).terrain = room.getTerrain();
-        }
-        return (room as any).terrain;
+        const terrain: RoomTerrain = (room as any).terrain;
+        return terrain || ((room as any).terrain = room.getTerrain());
     }
 
     static hasStructure(room: Room, position: Position) {
