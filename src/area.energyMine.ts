@@ -74,10 +74,10 @@ abstract class MiningPosition {
         if (this.miner) {
             const child = _.find(this.children, c => c.canAcceptMiner())!;
             child.acceptMiner(this.miner);
-            this.miner = miner;
-            this.memory.minerName = miner.name;
         }
         miner.move(this.getIncomingMinerDirection(miner).constant);
+        this.miner = miner;
+        this.memory.minerName = miner.name;
     }
     clearSpaceForMiner() {
         if (this.miner) {
@@ -245,8 +245,8 @@ export class EnergyMine {
     }
 
     runCreeps() {
-        this.incomingMiners && _.forEach(this.incomingMiners, mover => this.moveIncomingMiner(mover));
         this.miningPosition.runCreeps();
+        this.incomingMiners && _.forEach(this.incomingMiners, mover => this.moveIncomingMiner(mover));
     }
 
     private moveIncomingMiner(miner: Creep) {
@@ -255,6 +255,7 @@ export class EnergyMine {
                 this.colony.movementOverseer.moveCreepByPath(miner, this.memory.miningPosition.path);
             } else if (MapUtils.getChebyshevDistance(miner.pos, this.memory.miningPosition.position) === 1) {
                 this.miningPosition.acceptMiner(miner);
+                _.pull(this.memory.approachingMiners, miner.name);
             }
         }
     }
