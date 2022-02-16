@@ -179,7 +179,7 @@ test('move a nearby miner directly and transfer to mining position', () => {
     const energyMine = createEnergyMineWithTwoSingleChildren({approachingMiner});
     energyMine.runCreeps();
 
-    verify(approachingMiner).move(RIGHT);
+    verify(approachingMiner).move(BOTTOM);
     expect(energyMine.memory.approachingMiners).toHaveLength(0);
     expect(energyMine.memory.miningPosition.minerName).toBe(approachingMiner.name);
 });
@@ -315,7 +315,6 @@ test('recover a main miner from a double child', () => {
     expect(firstChildMiner.move).toHaveBeenCalledWith(LEFT);
     expect(secondChildMiner.move).toHaveBeenCalledTimes(0);
 });
-
 
 test('rebalance a double child', () => {
     const mainMiner = createMiner().withMemory({task: "mine", isMain: true});
